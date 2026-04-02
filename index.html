@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Memo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>AI Chat Memo</h1>
+
+        <div class="input-section">
+            <textarea id="memoInput" placeholder="保存したいメモを入力..."></textarea>
+            <button id="saveBtn">保存する</button>
+            <button id="exportBtn">JSONエクスポート</button>
+            <button id="deleteProcessedBtn">エクスポート済みを一括削除</button>
+        </div>
+
+        <div class="list-section">
+            <h2>保存済みメモ</h2>
+            <input type="text" id="searchInput" placeholder="メモをキーワードで検索..."
+                style="width: 100%; padding: 10px; margin-bottom: 1.5rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+
+            <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="unprocessedOnly">
+                <label for="unprocessedOnly" style="font-size: 0.9rem; color: #666; cursor: pointer;">未処理のみ表示</label>
+            </div>
+
+            <div id="memoList"></div>
+        </div>
+    </div>
+    <!-- 分割したスクリプトを順に読み込む -->
+    <script src="storage.js"></script>
+    <script src="export.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
