@@ -8,10 +8,11 @@ const Storage = {
         const savedData = localStorage.getItem(STORAGE_KEY);
         const memos = savedData ? JSON.parse(savedData) : [];
 
-        // 既存データに processed がない場合は false で補完
+        // 既存データに補完を行う
         return memos.map(memo => ({
             ...memo,
-            processed: memo.processed ?? false
+            processed: memo.processed ?? false,
+            _synced: memo._synced ?? true // 既存データは同期済みとみなす
         }));
     },
 
@@ -32,7 +33,8 @@ const Storage = {
             text: text,
             createdAt: new Date().toLocaleString('ja-JP'),
             updatedAt: now,
-            processed: false,      // 新規メモは未処理(false)
+            processed: false,
+            _synced: false,        // 新規作成時は未同期
             source: 'clipmemo-web',
             tags: [],
             summary: '',

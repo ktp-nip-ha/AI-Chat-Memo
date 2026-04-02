@@ -58,10 +58,9 @@ async function handleSave() {
 }
 
 /**
- * 2つのメモリストをマージする
+ * 2つのメモリストをサーバー基準でマージする
  * - 同じIDの場合は updatedAt が新しい方を優先
- * - どちらかにしかない場合は存在する方を優先
- * - 両方に updatedAt がない場合は local を優先
+ * - サーバーに存在しないローカルデータは、一度も同期されていない（_synced: false）場合のみ維持
  */
 function mergeMemos(localMemos, serverMemos) {
     const map = new Map();
@@ -70,24 +69,28 @@ function mergeMemos(localMemos, serverMemos) {
         return memo.updatedAt ? new Date(memo.updatedAt).getTime() : 0;
     };
 
-    // 1. サーバーデータを先にマップにセット
-    serverMemos.forEach(memo => {
-        map.set(memo.id, memo);
+    // 1. サーバーデータを基準にセット (サーバーにあるものは同期済みとする)
+    serverMemos.forEach(sMemo => {
+        map.set(sMemo.id, { ...sMemo, _synced: true });
     });
 
-    // 2. ローカルデータを比較しながら統合
-    localMemos.forEach(localMemo => {
-        const existing = map.get(localMemo.id);
-        if (!existing) {
-            map.set(localMemo.id, localMemo);
-        } else {
-            const localTime = getTimestamp(localMemo);
-            const existingTime = getTimestamp(existing);
-
-            // ローカルの方が新しい、または同時刻（共に無しを含む）ならローカル優先
-            if (localTime >= existingTime) {
-                map.set(localMemo.id, localMemo);
+    // 2. ローカルデータの判定
+    localMemos.forEach(lMemo => {
+        const sMemo = map.get(lMemo.id);
+        if (sMemo) {
+            // サーバーにもある場合：updatedAt が新しい方を採用
+            const lTime = getTimestamp(lMemo);
+            const sTime = getTimestamp(sMemo);
+            if (lTime > sTime) {
+                map.set(lMemo.id, { ...lMemo, _synced: true });
             }
+        } else {
+            // サーバーにない場合
+            if (lMemo._synced === false) {
+                // 一度も同期されていない（完全な新規）なら維持
+                map.set(lMemo.id, lMemo);
+            }
+            // 同期済みのはずなのにサーバーにないなら「削除された」とみなし、マージ結果に含めない
         }
     });
 
@@ -101,15 +104,19 @@ async function saveToServer(localMemos) {
         const serverMemos = Array.isArray(serverData) ? serverData : [];
 
         const merged = mergeMemos(localMemos, serverMemos);
+        
+        // サーバーに保存するデータは全て同期済みとしてマーク
+        const syncedMemos = merged.map(m => ({ ...m, _synced: true }));
 
         await fetch(SERVER_SAVE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(merged)
+            body: JSON.stringify(syncedMemos)
         });
 
-        memos = merged;
+        memos = syncedMemos;
         Storage.save(memos);
+        render(); // 最新の状態を反映
     } catch (e) {
         console.error("Failed to save to server:", e);
     }
