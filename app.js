@@ -71,24 +71,25 @@ function mergeMemos(localMemos, serverMemos) {
 
     // 1. サーバーデータを基準にセット (サーバーにあるものは同期済みとする)
     serverMemos.forEach(sMemo => {
-        map.set(sMemo.id, { ...sMemo, _synced: true });
+        map.set(String(sMemo.id), { ...sMemo, _synced: true });
     });
 
     // 2. ローカルデータの判定
     localMemos.forEach(lMemo => {
-        const sMemo = map.get(lMemo.id);
+        const memoKey = String(lMemo.id);
+        const sMemo = map.get(memoKey);
         if (sMemo) {
             // サーバーにもある場合：updatedAt が新しい方を採用
             const lTime = getTimestamp(lMemo);
             const sTime = getTimestamp(sMemo);
             if (lTime > sTime) {
-                map.set(lMemo.id, { ...lMemo, _synced: true });
+                map.set(memoKey, { ...lMemo, _synced: true });
             }
         } else {
             // サーバーにない場合
             if (lMemo._synced === false) {
                 // 一度も同期されていない（完全な新規）なら維持
-                map.set(lMemo.id, lMemo);
+                map.set(memoKey, lMemo);
             }
             // 同期済みのはずなのにサーバーにないなら「削除された」とみなし、マージ結果に含めない
         }
@@ -97,13 +98,14 @@ function mergeMemos(localMemos, serverMemos) {
     return Array.from(map.values());
 }
 
-async function saveToServer(localMemos) {
+async function saveToServer(localMemos, options = {}) {
     try {
         const res = await fetch(SERVER_LOAD_URL);
         const serverData = await res.json();
         const serverMemos = Array.isArray(serverData) ? serverData : [];
 
-        const merged = mergeMemos(localMemos, serverMemos);
+        const deletedIdSet = new Set((options.deletedIds || []).map(id => String(id)));
+        const merged = mergeMemos(localMemos, serverMemos).filter(memo => !deletedIdSet.has(String(memo.id)));
         
         // サーバーに保存するデータは全て同期済みとしてマーク
         const syncedMemos = merged.map(m => ({ ...m, _synced: true }));
@@ -127,10 +129,11 @@ window.saveToServer = saveToServer;
  * 削除ボタン押下時の処理
  */
 window.deleteMemo = async function (id) {
-    memos = memos.filter(memo => memo.id !== id);
+    const targetId = String(id);
+    memos = memos.filter(memo => String(memo.id) !== targetId);
     Storage.save(memos);
 
-    await saveToServer(memos);
+    await saveToServer(memos, { deletedIds: [targetId] });
 
     render();
 };
@@ -140,10 +143,11 @@ window.deleteMemo = async function (id) {
  */
 async function handleDeleteProcessed() {
     if (confirm('エクスポート済みのメモを削除します。よろしいですか？')) {
+        const deletedIds = memos.filter(memo => memo.processed).map(memo => String(memo.id));
         memos = memos.filter(memo => !memo.processed);
         Storage.save(memos);
 
-        await saveToServer(memos);
+        await saveToServer(memos, { deletedIds });
 
         render();
     }
@@ -167,25 +171,28 @@ function render() {
             const memoItem = document.createElement('div');
             memoItem.className = 'memo-item';
 
-            memoItem.innerHTML = `
-                <div class="memo-text">${escapeHtml(memo.text)}</div>
-                <div class="memo-footer">
-                    <span class="memo-date">${memo.createdAt}</span>
-                    <button class="delete-btn" onclick="deleteMemo('${memo.id}')">削除</button>
-                </div>
-            `;
+            const memoText = document.createElement('div');
+            memoText.className = 'memo-text';
+            memoText.textContent = memo.text;
 
+            const memoFooter = document.createElement('div');
+            memoFooter.className = 'memo-footer';
+
+            const memoDate = document.createElement('span');
+            memoDate.className = 'memo-date';
+            memoDate.textContent = memo.createdAt;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = '削除';
+            deleteBtn.addEventListener('click', () => window.deleteMemo(String(memo.id)));
+
+            memoFooter.appendChild(memoDate);
+            memoFooter.appendChild(deleteBtn);
+            memoItem.appendChild(memoText);
+            memoItem.appendChild(memoFooter);
             memoList.appendChild(memoItem);
         });
-}
-
-/**
- * HTMLエスケープ
- */
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
 }
 
 // イベントリスナー
