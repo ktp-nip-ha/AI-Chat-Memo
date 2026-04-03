@@ -160,6 +160,14 @@ function render() {
     const keyword = searchInput.value.toLowerCase();
     const isUnprocessedOnly = unprocessedOnly ? unprocessedOnly.checked : false;
     memoList.innerHTML = '';
+    const getMemoTime = (memo) => {
+        const updatedAtTime = Date.parse(memo.updatedAt || '');
+        if (!Number.isNaN(updatedAtTime)) return updatedAtTime;
+        const createdAtTime = Date.parse(memo.createdAt || '');
+        if (!Number.isNaN(createdAtTime)) return createdAtTime;
+        const idTime = Number(memo.id);
+        return Number.isNaN(idTime) ? 0 : idTime;
+    };
 
     memos
         .filter(memo => {
@@ -167,6 +175,7 @@ function render() {
             const matchUnprocessed = isUnprocessedOnly ? !memo.processed : true;
             return matchKeyword && matchUnprocessed;
         })
+        .sort((a, b) => getMemoTime(b) - getMemoTime(a))
         .forEach(memo => {
             const memoItem = document.createElement('div');
             memoItem.className = 'memo-item';
